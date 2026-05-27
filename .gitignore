@@ -1,0 +1,37 @@
+# Checkpoints
+checkpoints*/
+*.pt
+*.pth
+*.safetensors
+
+# Training logs / runtime
+logs/
+*.log
+nohup.out
+wandb/
+.cache/
+
+# Local datasets
+data/msrvtt/
+data/msrvtt_videos/
+data/msrvtt_raw/
+data/cc3m*/
+*.tar
+*.parquet
+*.mp4
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+
+# Claude / scratch
+.claude/
+demos/_tmp/

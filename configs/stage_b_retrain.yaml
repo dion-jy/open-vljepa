@@ -1,0 +1,61 @@
+# Stage B retrain: video-text pretraining on MSRVTT, initialized from Stage A best.pt
+# Same hyperparameters as the best Stage B run (bs=64, lr=1e-4, 50 epochs).
+
+encoder:
+  type: vjepa2-vitl
+  model_name: facebook/vjepa2-vitl-fpc64-256
+  frozen: true
+  output_dim: null
+
+y_encoder:
+  type: embeddinggemma
+  model_name: google/embeddinggemma-300m
+  proj_dim: 1536
+  max_target_len: 64
+  lr_multiplier: 0.05
+
+predictor:
+  type: llama
+  llama_name: meta-llama/Llama-3.2-1B
+  n_keep_layers: 8
+  proj_dim: 1536
+  max_query_len: 64
+  disable_causal_mask: true
+
+data:
+  dataset: msrvtt
+  data_dir: /home/junyeob/openvl-jepa/data/msrvtt
+  num_frames: 8
+  image_size: 256
+  max_query_len: 64
+  max_caption_len: 64
+  batch_size: 64
+  num_workers: 4
+
+training:
+  # Continue from Stage A best.pt — text alignment already learned on images
+  init_from: checkpoints_stage_a/best.pt
+  epochs: 50
+  lr: 1.0e-4
+  schedule: warmup_constant
+  weight_decay: 0.01
+  warmup_steps: 1000
+  temperature: 0.07
+  grad_clip: 1.0
+  bf16: true
+  gradient_accumulation_steps: 1
+  gradient_checkpointing: true
+  device: cuda:0
+  checkpoint_dir: checkpoints_stage_b_after_a/
+  log_every: 100
+  save_every: 5
+  keep_last_n: 3
+  save_optimizer_state: false
+
+eval:
+  batch_size: 8
+  metrics: [R@1, R@5, R@10]
+  every_n_epochs: 1
+  at_epochs: null
+  n_videos: 500
+  max_seconds: null

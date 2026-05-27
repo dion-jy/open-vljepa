@@ -1,0 +1,65 @@
+encoder:
+  type: vjepa2-vitl
+  # SSL pretrained backbone (paper Sec 3.1: "frozen V-JEPA 2 ViT-L self-supervised").
+  # Supports variable num_frames natively (RoPE + duplicate-if-<tubelet_size).
+  model_name: facebook/vjepa2-vitl-fpc64-256
+  frozen: true
+  output_dim: null  # keep raw V-JEPA2 hidden (1024); predictor will lift
+
+y_encoder:
+  type: embeddinggemma
+  model_name: google/embeddinggemma-300m
+  proj_dim: 1536
+  max_target_len: 512
+  lr_multiplier: 0.05
+
+predictor:
+  type: llama
+  llama_name: meta-llama/Llama-3.2-1B
+  n_keep_layers: 8
+  proj_dim: 1536
+  max_query_len: 512
+  disable_causal_mask: true
+
+data:
+  dataset: msrvtt
+  data_dir: /home/junyeob/openvl-jepa/data/msrvtt
+  num_frames: 8                 # paper Stage B (8 frames, 60k iter)
+  image_size: 256
+  # MSRVTT captions are short (~10 tokens, max ~30). Pad to 64 saves big memory.
+  # Paper used 512 because their text could be long (VQA, multi-sentence captions).
+  max_query_len: 64
+  max_caption_len: 64
+  batch_size: 64                # bs=80 OOMs in DDP (NCCL overhead). bs=64 = 16GB single + 3GB DDP overhead = ~19GB safe
+  num_workers: 4
+
+training:
+  # Adjusted for bs=64 (eff 512): LR scaled up (paper 5e-5 was tuned for image phase 24k)
+  epochs: 50                    # extended (more opt steps needed for bigger batch)
+  lr: 1.0e-4                    # 2x paper — compensates for smaller eff batch vs paper image phase
+  schedule: warmup_constant     # warmup → constant (paper); cosine also supported
+  weight_decay: 0.01
+  warmup_steps: 1000
+  temperature: 0.07
+  grad_clip: 1.0
+  bf16: true
+  gradient_accumulation_steps: 1     # disabled — doesn't help InfoNCE; physical bs is what matters
+  gradient_checkpointing: true
+  device: cuda:0
+  checkpoint_dir: checkpoints_bs64_lr1e4/   # bs=64, lr=1e-4, 50 epochs
+  log_every: 100
+  # Checkpoint cadence / disk control
+  save_every: 5              # save epoch_N.pt every N epochs (decoupled from best update)
+  keep_last_n: 3             # rolling: keep only most recent N epoch_*.pt (null = keep all)
+  save_optimizer_state: false  # include optimizer state (true ~5GB, false ~2GB per ckpt)
+
+eval:
+  batch_size: 8                # per-step eval batch (single GPU at training time)
+  metrics: [R@1, R@5, R@10]
+  # Frequency control (any of these can trigger eval at end of an epoch):
+  every_n_epochs: 1            # 0/null = off. 1 = every epoch. 5 = every 5 epochs.
+  at_epochs: null              # explicit list e.g. [1, 3, 5, 10, 20, 30] — fires if (epoch+1) in list
+  n_videos: 500                # subset for fast in-training eval (null = full 2990).
+                               # Final post-train eval uses full pool via scripts/eval.py.
+  max_seconds: null            # safety cap: if last eval took > max_seconds, skip subsequent in-training evals
+                               # (null = no cap). Useful if eval grows expensive on large pool.

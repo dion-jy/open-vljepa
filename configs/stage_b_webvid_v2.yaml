@@ -1,0 +1,64 @@
+# Stage B zero-shot — WebVid-only training (NO MSRVTT in train, paper-style protocol).
+# Eval on MSRVTT each epoch = pure zero-shot R@1.
+
+encoder:
+  type: vjepa2-vitl
+  model_name: facebook/vjepa2-vitl-fpc64-256
+  frozen: true
+  output_dim: null
+
+y_encoder:
+  type: embeddinggemma
+  model_name: google/embeddinggemma-300m
+  proj_dim: 1536
+  max_target_len: 64
+  lr_multiplier: 0.05
+
+predictor:
+  type: llama
+  llama_name: meta-llama/Llama-3.2-1B
+  n_keep_layers: 8
+  proj_dim: 1536
+  max_query_len: 64
+  disable_causal_mask: true
+
+data:
+  dataset: webvid
+  data_dir: /data/junyeob/openvl-jepa-images/webvid/videos
+  num_frames: 8
+  image_size: 256
+  max_query_len: 64
+  max_caption_len: 64
+  query_text: "Describe the video."
+  batch_size: 64
+  num_workers: 4
+  epoch_size: 1_500_000
+
+training:
+  init_from: checkpoints_stage_a/best.pt
+  epochs: 20
+  lr: 1.0e-4
+  schedule: warmup_constant
+  weight_decay: 0.01
+  warmup_steps: 2000
+  temperature: 0.07
+  grad_clip: 1.0
+  bf16: true
+  gradient_accumulation_steps: 1
+  gradient_checkpointing: true
+  device: cuda:0
+  checkpoint_dir: checkpoints_stage_b_webvid_v2/
+  log_every: 100
+  save_every: 1
+  save_every_steps: 500
+  keep_last_n: 5
+  save_optimizer_state: false
+
+eval:
+  batch_size: 8
+  metrics: [R@1, R@5, R@10]
+  every_n_epochs: 1
+  at_epochs: null
+  n_videos: 500
+  max_seconds: null
+  data_dir: /home/junyeob/openvl-jepa/data/msrvtt
