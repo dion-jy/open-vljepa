@@ -94,7 +94,10 @@ def build_optimizer(model: nn.Module, train_cfg: dict, y_encoder_lr_mult: float 
 def build_scheduler(optimizer, train_cfg: dict, steps_per_epoch: int):
     """warmup_constant (paper-faithful) or cosine schedule."""
     warmup_steps = train_cfg.get("warmup_steps", 500)
-    total_steps = train_cfg["epochs"] * steps_per_epoch
+    # scheduler.step() runs once per optimizer step, i.e. every
+    # gradient_accumulation_steps batches, so count optimizer steps here.
+    accum_steps = train_cfg.get("gradient_accumulation_steps", 1)
+    total_steps = train_cfg["epochs"] * (steps_per_epoch // accum_steps)
     schedule = train_cfg.get("schedule", "cosine")
 
     if schedule == "warmup_constant":
